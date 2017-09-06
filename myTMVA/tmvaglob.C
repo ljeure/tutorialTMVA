@@ -17,10 +17,11 @@
 #include "TFile.h"
 #include "TDirectory.h"
 #include "TObjArray.h"
-
-
+//#include "prefilter.h"
+#include "TClass.h"
+#include "TText.h"
+#include "TLegend.h"
 #include "RVersion.h"
-
 using std::cout;
 using std::endl;
 

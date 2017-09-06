@@ -1,15 +1,42 @@
 #include "readxml.h"
 #include "Tools.h"
-
-void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
+#include "uti.h"
+#include "../myTMVA/prefilter.h"
+//void readxml(Float_t ptMin=5, Float_t ptMax=10, Float_t RAA=1.)
+void readxml(float RAA=1.,string mva="CutsSA", int pbpb=0, float ptMin=5., float ptMax=10.)
 {
+      isPbPb = (bool)pbpb;
+//     isPbPb = 1;
+     MVAtype = (TString)mva;
+     //MVAtype = "BDT";
+     ptmin = ptMin;
+     ptmax = ptMax;
+     if(isPbPb)
+     {
+         inputSname = inputSname_PP;
+         inputBname = inputBname_PP;
+         mycuts = mycuts_PP;
+         mycutb = mycutb_PP;
+         mycutg = mycutg_PP;
+         colsyst = "PbPb";
+     }
+     else
+     {
+         inputSname = inputSname_pp;
+         inputBname = inputBname_pp;
+         mycuts = mycuts_pp;
+         mycutb = mycutb_pp;
+         mycutg = mycutg_pp;
+         colsyst = "pp";
+     }
+
   void calRatio(Float_t* results, Bool_t verbose=false);
-  ptmin = ptMin;
-  ptmax = ptMax;
+//  ptmin = ptMin;
+//  ptmax = ptMax;
   raa = RAA;
 
-  gStyle->SetOptTitle(0);
-  gStyle->SetOptStat(0);
+  gStyle->SetOptTitle(111);
+  gStyle->SetOptStat(1111);
   gStyle->SetEndErrorSize(0);
   gStyle->SetMarkerStyle(20);
   gStyle->SetTextSize(0.05);
@@ -21,7 +48,9 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
   gStyle->SetTitleX(.0f);
 
   //read weight file
-  const char* filename = "../myTMVA/weights/TMVAClassification_CutsSA.weights.xml";
+//  const char* filename = "../myTMVA/weights/TMVAClassification_CutsSA.weights.xml";
+  TString fileName = Form("../myTMVA/weights/TMVA_%s_%s_%.0f_%.0f.weights.xml",MVAtype.Data(),colsyst.Data(),ptmin,ptmax);
+  const char* filename = fileName.Data();
   void *doc = TMVA::gTools().xmlengine().ParseFile(filename,TMVA::gTools().xmlenginebuffersize());
   void* rootnode = TMVA::gTools().xmlengine().DocGetRootElement(doc); // node "MethodSetup"
   TString fullMethodName("");  
@@ -47,8 +76,11 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
 
   TObjArray *marginclass = varProp.Tokenize(" ");
   std::vector<TString> margins;//avoid objarrays
+
+  std::cout << "var prop " << varProp << "\n";
   for(int i=0;i<marginclass->GetEntries();i++)
     {
+      cout << "margins push back " << i << std::endl;
       margins.push_back(((TObjString *)(marginclass->At(i)))->String());
     }
   void* variables = TMVA::gTools().GetChild(rootnode,"Variables");
@@ -64,6 +96,9 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
       TString tem = Form("Variable%i",k);
       varval[k] = varname;
       cout<<" ├────────────┼────────────────────────────┼────────┤"<<endl;
+      cout <<"8"<< setw(6) << std::endl;
+      cout <<"9"<< margins[k] << std::endl;
+
       cout<<" | "<<setiosflags(ios::left)<<setw(10)<<tem<<" | "<<setiosflags(ios::left)<<setw(26)<<varname<<" | "<<setiosflags(ios::left)<<setw(6)<<margins[k]<<" |"<<endl;
       var = TMVA::gTools().GetNextChild(var);
       varnames.push_back(varname);
@@ -75,32 +110,33 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
   int n=0;
   while(eff)
     {
+
       TMVA::gTools().ReadAttr(eff, "effS", effS[n]);
       TMVA::gTools().ReadAttr(eff, "effB", effB[n]);
       void* cutsnode = TMVA::gTools().GetChild(eff,"Cuts");
 
       TString cut;
       for(ULong_t l=0;l<varnames.size();l++)
-	{
-	  Double_t min,max;
-	  TMVA::gTools().ReadAttr(cutsnode, TString("cutMin_")+l, min);
-	  TMVA::gTools().ReadAttr(cutsnode, TString("cutMax_")+l, max);
-	  TString lessmax = "<"; lessmax+=max;
-	  TString moremin = ">"; moremin+=min;
-	  if(margins[l]=="FMin")
-	    {
-	      cut+=" && "+varnames[l]+lessmax;
-	      cutval[l].push_back(max);
-	    }
-	  if(margins[l]=="FMax")
-	    {
-	      cut+=" && "+varnames[l]+moremin;
-	      cutval[l].push_back(min);
-	    }
-	}
+	      {
+    	  Double_t min,max;
+    	  TMVA::gTools().ReadAttr(cutsnode, TString("cutMin_")+l, min);
+    	  TMVA::gTools().ReadAttr(cutsnode, TString("cutMax_")+l, max);
+    	  TString lessmax = "<"; lessmax+=max;
+    	  TString moremin = ">"; moremin+=min;
+    	  if(margins[l]=="FMin")
+    	    {
+          cut+=" && "+varnames[l]+lessmax;
+  	      cutval[l].push_back(max);
+    	    }
+    	  if(margins[l]=="FMax")
+    	    {
+  	      cut+=" && "+varnames[l]+moremin;
+	        cutval[l].push_back(min);
+    	    }
+      	}
       cuts.push_back(cut);
       eff = TMVA::gTools().GetNextChild(eff);
-      n++;
+       n++;
     }
   TMVA::gTools().xmlengine().FreeDoc(doc);
 
@@ -120,7 +156,7 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
   Double_t max = wSignal*effS[1]/sqrt(wSignal*effS[1]+wBackground*effB[1]);
   int maxindex = 1;
   effS[0]=0;
-  for(int i=1;i<100;i++)
+  for(int i=1;i<300;i++)
     {
       effSig[i] = wSignal*effS[i]/sqrt(wSignal*effS[i]+wBackground*effB[i]);
       if(effSig[i]>max)
@@ -136,7 +172,7 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
   cout<<" | "<<setiosflags(ios::left)<<setw(10)<<"Sig eff"<<" | "<<setiosflags(ios::left)<<setw(10)<<effS[maxindex]<<" | "<<setiosflags(ios::left)<<setw(13)<<"S/sqrt(S+B)"<<" | "<<setiosflags(ios::left)<<setw(6)<<max<<" |"<<endl;
   cout<<" ├────────────┴────────────┴───┬───────────┴────────┤"<<endl;
 
-  for(int m=0;m<nVar;m++)
+  for(unsigned int m=0;m<nVar;m++)
     {
       if(m) cout<<" ├─────────────────────────────┼────────────────────┤"<<endl;
       cout<<" | "<<setiosflags(ios::left)<<setw(27)<<varval[m]<<" | "<<setiosflags(ios::left)<<setw(18)<<cutval[m].at(maxindex)<<" |"<<endl;
@@ -159,12 +195,13 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
   hempty->GetYaxis()->SetLabelFont(42);
   hempty->GetXaxis()->SetLabelSize(0.035);
   hempty->GetYaxis()->SetLabelSize(0.035);
-  TLatex* texPar = new TLatex(0.18,0.93, "PbPb 2.76 TeV D^{0}");
+  //TLatex* texPar = new TLatex(0.18,0.93, "pp 5 TeV Bs^{0}");
+  TLatex* texPar = new TLatex(0.18,0.93, Form("%s 5.02 TeV",colsyst.Data()));
   texPar->SetNDC();
   texPar->SetTextAlign(12);
   texPar->SetTextSize(0.04);
   texPar->SetTextFont(42);
-  TLatex* texPtY = new TLatex(0.96,0.93, Form("|y|<1, %.1f<p_{T}<%.1f GeV/c",ptmin,ptmax));
+  TLatex* texPtY = new TLatex(0.96,0.93, Form("|y|<2.4, %.1f<p_{T}<%.1f GeV/c",ptmin,ptmax));
   texPtY->SetNDC();
   texPtY->SetTextAlign(32);
   texPtY->SetTextSize(0.04);
@@ -176,21 +213,39 @@ void readxml(Float_t ptMin=5.5, Float_t ptMax=7., Float_t RAA=1.)
   texPar->Draw();
   texPtY->Draw();
   gsig->Draw("same*");
-  csig->SaveAs("plots/Significance.pdf");
+   csig->SaveAs(Form("plots/Significance_%s_%s_%.0f_%.0f.pdf",MVAtype.Data(),colsyst.Data(),ptmin,ptmax)); 
+// csig->SaveAs("plots/Significance.pdf");
 }
 
 void calRatio(Float_t* results, Bool_t verbose=false)
 {
-  TFile *inputS = TFile::Open(inputSname);
-  TFile *inputB = TFile::Open(inputBname);
+ // TFile *inputS = TFile::Open(inputSname);
+ // TFile *inputB = TFile::Open(inputBname);
+    TFile *inputS = new TFile(inputSname.Data());
+    TFile *inputB = new TFile(inputBname.Data());
 
-  TTree *signal = (TTree*)inputS->Get("recodmesontree");
-  TTree *background = (TTree*)inputB->Get("recodmesontree");
-  TTree *generated = (TTree*)inputS->Get("gendmesontree");
+    TTree *background = (TTree*)inputB->Get("ntphi");
+    background->AddFriend("ntHlt");
+    background->AddFriend("ntHi");
+    background->AddFriend("ntSkim");
 
-  TString sels = Form("%s&&dcandpt>%f&&dcandpt<%f",mycuts.Data(),ptmin,ptmax);
-  TString selb = Form("%s&&dcandpt>%f&&dcandpt<%f",mycutb.Data(),ptmin,ptmax);
-  TString selg = Form("%s&&dpt>%f&&dpt<%f",mycutg.Data(),ptmin,ptmax);
+   TTree *generated = (TTree*)inputS->Get("ntGen");
+   generated->AddFriend("ntHlt");
+   generated->AddFriend("ntHi");
+
+   TTree *signal = (TTree*)inputS->Get("ntphi");
+   signal->AddFriend("ntHlt");
+   signal->AddFriend("ntHi");
+   signal->AddFriend("ntSkim");
+   signal->AddFriend(generated);
+
+   TString sels = Form("%s",mycuts.Data());
+   TString selb = Form("%s",mycutb.Data());
+   TString selg = Form("%s",mycutg.Data());
+
+//  TString sels = Form("%s&&Bpt>%f&&Bpt<%f",mycuts.Data(),ptmin,ptmax);
+//  TString selb = Form("%s&&Bpt>%f&&Bpt<%f",mycutb.Data(),ptmin,ptmax);
+//  TString selg = Form("%s&&Gpt>%f&&Gpt<%f",mycutg.Data(),ptmin,ptmax);
 
   TString ptstring = Form("(%.1f,%.1f)",ptmin,ptmax);
   cout<<" | "<<setiosflags(ios::left)<<setw(10)<<"Pt"<<" | "<<setiosflags(ios::left)<<setw(26)<<ptstring<<" | "<<setiosflags(ios::left)<<setw(6)<<" "<<" |"<<endl;
@@ -200,79 +255,91 @@ void calRatio(Float_t* results, Bool_t verbose=false)
   cout<<endl;
 
   //Get signal peak sigma
-  TH1D* hmassS = new TH1D("hmassS",";D mass (GeV/c^{2});Signal Entries",50,1.7,2.1);
-  signal->Project("hmassS","dcandmass",sels);
+  TH1D* hmassS = new TH1D("hmassS",";B mass (GeV/c^{2});Signal Entries",50,5.0,6.0);
+  //signal->Project("hmassS","Bmass",sels);
+  signal->Project("hmassS","Bmass",Form("%s&&Bpt>%f&&Bpt<%f&&Bgen==23333",sels.Data(),ptmin,ptmax));
+  divideBinWidth(hmassS);
   hmassS->Sumw2();
   TCanvas* cmassS = new TCanvas("cmassS","",600,600);
   hmassS->Draw();
   TF1* fmass = new TF1("fmass","[0]*Gaus(x,[1],[2])");
-  fmass->SetParLimits(2,0.005,0.05);
-  Float_t setparam1 = 1.86;
+  fmass->SetParLimits(2,0.001,0.02);
+  Float_t setparam1 = 5.367;
   Float_t setparam2 = 0.01;
   fmass->SetParameter(1,setparam1);
   fmass->SetParameter(2,setparam2);
-  if(verbose) hmassS->Fit("fmass","L","",1.7,2.1);
-  else hmassS->Fit("fmass","L q","",1.7,2.1);
-  cmassS->SaveAs("plots/Signal.pdf");
+  if(verbose) hmassS->Fit("fmass","L","",5.0,6.0);
+  else hmassS->Fit("fmass","L q","",5.0,6.0);
+  cmassS->SaveAs(Form("plots/Signal_%s_%s_%.0f_%.0f.pdf",MVAtype.Data(),colsyst.Data(),ptmin,ptmax));
+  //cmassS->SaveAs("plots/Signal.pdf");
   Float_t sigma = fmass->GetParameter(2);
 
   //Background candidate number
-  TH1D* hmassB = new TH1D("hmassB",";D mass (GeV/c^{2});Background Entries",50,0,10);
-  background->Project("hmassB","dcandmass",selb);
+  TH1D* hmassB = new TH1D("hmassB",";B mass (GeV/c^{2});Background Entries",50,0,10);
+  background->Project("hmassB","Bmass",Form("%s&&Bpt>%f&&Bpt<%f",selb.Data(),ptmin,ptmax));
+  //background->Project("hmassB","Bmass",selb);
   TCanvas* cmassB = new TCanvas("cmassB","",600,600);
   hmassB->Draw();
-  cmassB->SaveAs("plots/Background.pdf");
+  cmassB->SaveAs(Form("plots/Background_%s_%s_%.0f_%.0f.pdf",MVAtype.Data(),colsyst.Data(),ptmin,ptmax));
+  //cmassB->SaveAs("plots/Background.pdf");
   Int_t nentriesB = hmassB->Integral();
 
   //FONLL
-  ifstream getdata("fonlls/fo_Dzero_pp_2p76_y1.dat");
+  //ifstream getdata("fonlls/fo_pp_Bplus_5p03TeV_y2p4.dat");
+  ifstream getdata("fonlls/fonll.dat");
   if(!getdata.is_open()) cout<<"Opening the file fails"<<endl;
   Float_t tem;
   Int_t nbin=0;
   while (!getdata.eof())
     {
-      getdata>>pt[nbin]>>central[nbin]>>tem>>tem>>tem>>tem>>tem>>tem>>tem>>tem>>tem>>tem>>tem>>tem;
+      getdata>>pt[nbin]>>central[nbin]>>tem>>tem>>tem>>tem>>tem>>tem>>tem>>tem;   //>>tem>>tem>>tem>>tem;
       if(pt[nbin]>=ptmin&&pt[nbin]<=ptmax) nbin++;
     }
-  TH1D* hfonll = new TH1D("hfonll",";D p_{T} (GeV/c);FONLL differential xsection",nbin-1,pt);
+  TH1D* hfonll = new TH1D("hfonll",";B p_{T} (GeV/c);FONLL differential xsection",nbin-1,pt);
   for(int i=0;i<nbin;i++)
     {
       hfonll->SetBinContent(i,central[i]);
     }
   TCanvas* cfonll = new TCanvas("cfonll","",600,600);
   hfonll->Draw();
-  cfonll->SaveAs("plots/Fonll.pdf");
-
-  TH1D* hrec = new TH1D("hrec",";D p_{T} (GeV/c);Signal reco entries",nbin-1,pt);
-  TH1D* hgen = new TH1D("hgen",";D p_{T} (GeV/c);Generated entries",nbin-1,pt);
-  TH1D* heff = new TH1D("heff",";D p_{T} (GeV/c);Prefilter efficiency",nbin-1,pt);
-  signal->Project("hrec","dcandpt",mycuts);
-  generated->Project("hgen","dpt",mycutg);
+  cfonll->SaveAs(Form("plots/Fonll_%s_%s_%.0f_%.0f.pdf",MVAtype.Data(),colsyst.Data(),ptmin,ptmax));
+  //cfonll->SaveAs("plots/Fonll.pdf");
+//std::cout << " pt: " << pt[0] << " " <<  pt[1]<< std::endl;
+  TH1D* hrec = new TH1D("hrec",";B p_{T} (GeV/c);Signal reco entries",nbin-1,pt);
+  TH1D* hgen = new TH1D("hgen",";B p_{T} (GeV/c);Generated entries",nbin-1,pt);
+  TH1D* heff = new TH1D("heff",";B p_{T} (GeV/c);Prefilter efficiency",nbin-1,pt);
+  signal->Project("hrec","Bpt",Form("%s",mycuts.Data()));
+  generated->Project("hgen","Gpt",Form("%s",mycutg.Data()));
+  //signal->Project("hrec","Bpt",mycuts);
+  //generated->Project("hgen","Gpt",mycutg);
   heff->Divide(hrec,hgen,1.,1.,"B");
   TCanvas* ceff = new TCanvas("ceff","",600,600);
   heff->Draw();
-  ceff->SaveAs("plots/EffPrefilter.pdf");
+  //ceff->SaveAs("plots/EffPrefilter.pdf");
+  ceff->SaveAs(Form("plots/EffPrefilter_%s_%s_%.0f_%.0f.pdf",MVAtype.Data(),colsyst.Data(),ptmin,ptmax));
 
   TH1D* htheoryreco = new TH1D("htheoryreco","",nbin-1,pt);
   htheoryreco->Multiply(heff,hfonll,1,1,"B");
 
   Double_t nevent = background->GetEntries();
-  Double_t Taa = 5.65; //mb^-1
-  Double_t BR = 0.0387;
-  Double_t deltapt = 0.25;
+  Double_t Taa = 5.58; //mb^-1
+  Double_t BR = 0.000031189;
+  std::cout << "delta pt: " << ptmax-ptmin << std::endl;
+  double deltapt = ptmax-ptmin;
+  //Double_t deltapt = 0.25;
   //central[i] - in pb/GeV/c
 
-  Double_t yieldDzero = htheoryreco->Integral();
-  yieldDzero*=(1.e-9)*BR*deltapt*Taa*nevent*raa;
+  Double_t yieldBszero = htheoryreco->Integral();
+  yieldBszero*=(1.e-9)*BR*deltapt*Taa*nevent*raa;
 
   results[0] = nentriesB*Nsigma*sigma/0.05;//0.05: half of sideband width
-  results[1] = yieldDzero;
+  results[1] = yieldBszero;
   cout<<endl;
   cout<<" ╒══════════════════════════════════════════════════╕"<<endl;
   cout<<" |                   Weight Result                  |"<<endl;
   cout<<" ├────────────┬────────────┬────────────┬───────────┤"<<endl;
   cout<<" | "<<setiosflags(ios::left)<<setw(10)<<"Bkg #"<<" | "<<setiosflags(ios::left)<<setw(10)<<nentriesB<<" | "<<setiosflags(ios::left)<<setw(10)<<"Sig reg"<<" | "<<setiosflags(ios::left)<<setw(9)<<setprecision(3)<<sigma*Nsigma*2<<" |"<<endl;
   cout<<" ├────────────┼────────────┼────────────┼───────────┤"<<endl;
-  cout<<" | "<<setiosflags(ios::left)<<setw(10)<<"SigWeight"<<" | "<<setiosflags(ios::left)<<setw(10)<<yieldDzero<<" | "<<setiosflags(ios::left)<<setw(10)<<"BkgWeight"<<" | "<<setiosflags(ios::left)<<setw(9)<<nentriesB*Nsigma*sigma/0.05<<" |"<<endl;
+  cout<<" | "<<setiosflags(ios::left)<<setw(10)<<"SigWeight"<<" | "<<setiosflags(ios::left)<<setw(10)<<yieldBszero<<" | "<<setiosflags(ios::left)<<setw(10)<<"BkgWeight"<<" | "<<setiosflags(ios::left)<<setw(9)<<nentriesB*Nsigma*sigma/0.05<<" |"<<endl;
   cout<<" ╘════════════╧════════════╧════════════╧═══════════╛"<<endl;
 }

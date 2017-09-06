@@ -9,7 +9,6 @@
 #include "TObjString.h"
 
 #include "tmvaglob.C"
-
 // some global lists
 static TList*               TMVAGui_keyContent;
 static std::vector<TString> TMVAGui_inactiveButtons;
@@ -69,6 +68,10 @@ void TMVAGui( const char* fName = "TMVA.root" )
 
    // init
    TMVAGui_inactiveButtons.clear();
+////scriptle calsitrcagimiz zaman acacgiz bunu
+  TString name = Form("ROOT/TMVA_%s_%s_%.0f_%.0f.root",MVAtype.Data(),colsyst.Data(),ptmin,ptmax);
+  //TString name = "ROOT/TMVA_CutsSA_pp_10_15.root";
+   fName = name.Data();
 
    // check if file exist
    TFile* file = TFile::Open( fName );

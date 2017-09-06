@@ -39,6 +39,8 @@
 #include "TObjString.h"
 #include "TSystem.h"
 #include "TROOT.h"
+//#include "TMVA/MethodBDT.h"
+//#include "TMVAClassification.h"
 
 #if not defined(__CINT__) || defined(__MAKECINT__)
 // needs to be included when makecint runs (ACLIC)
@@ -47,8 +49,8 @@
 #include "TMVAGui.C"
 #endif
 
-void TMVAClassification( TString myMethodList = "" )
-{
+//void TMVAClassification( TString myMethodList = "" )
+//{
    // The explicit loading of the shared libTMVA is done in TMVAlogon.C, defined in .rootrc
    // if you use your private .rootrc, or run from a different directory, please copy the
    // corresponding lines from .rootrc
@@ -66,213 +68,274 @@ void TMVAClassification( TString myMethodList = "" )
 
    //---------------------------------------------------------------
    // This loads the library
-   TMVA::Tools::Instance();
+  
 
-   // to get access to the GUI and all tmva macros
-    TString tmva_dir(TString(gRootDir) + "/tmva");
-    if(gSystem->Getenv("TMVASYS"))
-       tmva_dir = TString(gSystem->Getenv("TMVASYS"));
-    gROOT->SetMacroPath(tmva_dir + "/test/:" + gROOT->GetMacroPath() );
-    //gROOT->ProcessLine(".L TMVAGui.C");
+void TMVAClassification(string mva="CutsSA", int pbpb=0, float ptMin=5.,
+    float ptMax=10., TString myMethodList = "" ) {
+  isPbPb = (bool)pbpb;
+  MVAtype = (TString)mva;
+  ptmin = ptMin;
+  ptmax = ptMax;
+  if(isPbPb) {
+    inputSname = inputSname_PP;
+    inputBname = inputBname_PP;
+    mycuts = mycuts_PP;
+    mycutb = mycutb_PP;
+    mycutg = mycutg_PP;
+    colsyst = "PbPb";
+  }
+  else {
+    inputSname = inputSname_pp;
+    std::cout << "using inputSname pp\n";
+    inputBname = inputBname_pp;
+    mycuts = mycuts_pp;
+    mycutb = mycutb_pp;
+    mycutg = mycutg_pp;
+    colsyst = "pp";
+  }
 
+  TMVA::Tools::Instance();
 
-   // Default MVA methods to be trained + tested
-   std::map<std::string,int> Use;
+  // to get access to the GUI and all tmva macros
+  TString tmva_dir(TString(gRootDir) + "/tmva");
+  if(gSystem->Getenv("TMVASYS"))
+    tmva_dir = TString(gSystem->Getenv("TMVASYS"));
+  gROOT->SetMacroPath(tmva_dir + "/test/:" + gROOT->GetMacroPath() );
 
-   // --- Cut optimisation
-   Use["Cuts"]            = 0;
-   Use["CutsD"]           = 0;
-   Use["CutsPCA"]         = 0;
-   Use["CutsGA"]          = 0;
-   Use["CutsSA"]          = 1;
-   // 
-   // --- 1-dimensional likelihood ("naive Bayes estimator")
-   Use["Likelihood"]      = 0;
-   Use["LikelihoodD"]     = 0; // the "D" extension indicates decorrelated input variables (see option strings)
-   Use["LikelihoodPCA"]   = 0; // the "PCA" extension indicates PCA-transformed input variables (see option strings)
-   Use["LikelihoodKDE"]   = 0;
-   Use["LikelihoodMIX"]   = 0;
-   //
-   // --- Mutidimensional likelihood and Nearest-Neighbour methods
-   Use["PDERS"]           = 0;
-   Use["PDERSD"]          = 0;
-   Use["PDERSPCA"]        = 0;
-   Use["PDEFoam"]         = 0;
-   Use["PDEFoamBoost"]    = 0; // uses generalised MVA method boosting
-   Use["KNN"]             = 0; // k-nearest neighbour method
-   //
-   // --- Linear Discriminant Analysis
-   Use["LD"]              = 0; // Linear Discriminant identical to Fisher
-   Use["Fisher"]          = 0;
-   Use["FisherG"]         = 0;
-   Use["BoostedFisher"]   = 0; // uses generalised MVA method boosting
-   Use["HMatrix"]         = 0;
-   //
-   // --- Function Discriminant analysis
-   Use["FDA_GA"]          = 0; // minimisation of user-defined function using Genetics Algorithm
-   Use["FDA_SA"]          = 0;
-   Use["FDA_MC"]          = 0;
-   Use["FDA_MT"]          = 0;
-   Use["FDA_GAMT"]        = 0;
-   Use["FDA_MCMT"]        = 0;
-   //
-   // --- Neural Networks (all are feed-forward Multilayer Perceptrons)
-   Use["MLP"]             = 0; // Recommended ANN
-   Use["MLPBFGS"]         = 0; // Recommended ANN with optional training method
-   Use["MLPBNN"]          = 0; // Recommended ANN with BFGS training method and bayesian regulator
-   Use["CFMlpANN"]        = 0; // Depreciated ANN from ALEPH
-   Use["TMlpANN"]         = 0; // ROOT's own ANN
-   //
-   // --- Support Vector Machine 
-   Use["SVM"]             = 0;
-   // 
-   // --- Boosted Decision Trees
-   Use["BDT"]             = 0; // uses Adaptive Boost
-   Use["BDTG"]            = 0; // uses Gradient Boost
-   Use["BDTB"]            = 0; // uses Bagging
-   Use["BDTD"]            = 0; // decorrelation + Adaptive Boost
-   Use["BDTF"]            = 0; // allow usage of fisher discriminant for node splitting 
-   // 
-   // --- Friedman's RuleFit method, ie, an optimised series of cuts ("rules")
-   Use["RuleFit"]         = 0;
-   // ---------------------------------------------------------------
+  // Default MVA methods to be trained + tested
+  std::map<std::string,int> Use;
 
-   std::cout << std::endl;
-   std::cout << "==> Start TMVAClassification" << std::endl;
+  // --- Cut optimisation
+  Use["Cuts"]            = (int)(MVAtype == "Cuts");
+  Use["CutsD"]           = (int)(MVAtype == "CutsD");
+  Use["CutsPCA"]         = (int)(MVAtype == "CutsPCA");
+  Use["CutsGA"]          = (int)(MVAtype == "CutsGA");
+  Use["CutsSA"]          = (int)(MVAtype == "CutsSA");  
 
-   // Select methods (don't look at this code - not of interest)
-   if(myMethodList!= "")
-     {
-       for(std::map<std::string,int>::iterator it = Use.begin(); it != Use.end(); it++) it->second = 0;
-       std::vector<TString> mlist = TMVA::gTools().SplitString( myMethodList, ',' );
-       for(UInt_t i=0; i<mlist.size(); i++)
-         {
-           std::string regMethod(mlist[i]);
-           if (Use.find(regMethod)==Use.end())
-             {
-               std::cout << "Method \"" << regMethod << "\" not known in TMVA under this name. Choose among the following:" << std::endl;
-               for(std::map<std::string,int>::iterator it = Use.begin(); it != Use.end(); it++) std::cout << it->first << " ";
-               std::cout << std::endl;
-               return;
-             }
-           Use[regMethod] = 1;
-         }
-     }
-
-   // --------------------------------------------------------------------------------------------------
-
-   // --- Here the preparation phase begins
-
-   // Create a ROOT output file where TMVA will store ntuples, histograms, etc.
-   TString outfileName("TMVA.root");
-   TFile* outputFile = TFile::Open(outfileName,"RECREATE");
-
-   // Create the factory object. Later you can choose the methods
-   // whose performance you'd like to investigate. The factory is 
-   // the only TMVA object you have to interact with
-   //
-   // The first argument is the base of the name of all the
-   // weightfiles in the directory weight/
-   //
-   // The second argument is the output file for the training results
-   // All TMVA output can be suppressed by removing the "!" (not) in
-   // front of the "Silent" argument in the option string
-   TMVA::Factory *factory = new TMVA::Factory( "TMVAClassification", outputFile,
-                                               "!V:!Silent:Color:DrawProgressBar:Transformations=I;D;P;G,D:AnalysisType=Classification" );
-
-   // If you wish to modify default settings
-   // (please check "src/Config.h" to see all available global options)
-   //    (TMVA::gConfig().GetVariablePlotting()).fTimesRMS = 8.0;
-   //    (TMVA::gConfig().GetIONames()).fWeightFileDir = "myWeightDirectory";
-
-   // Define the input variables that shall be used for the MVA training
-   // note that you may also use variable expressions, such as: "3*var1/var2*abs(var3)"
-   // [all types of expressions that can also be parsed by TTree::Draw( "expression" )]
-
-   factory->AddVariable("dcandffls3d");//>
-   factory->AddVariable("dcandfprob");//>
-
-   // You can add so-called "Spectator variables", which are not used in the MVA training,
-   // but will appear in the final "TestTree" produced by TMVA. This TestTree will contain the
-   // input variables, the response values of all trained MVAs, and the spectator variables
-   //factory->AddSpectator( "spec1 := var1*2",  "Spectator 1", "units", 'F' );
-   //factory->AddSpectator( "spec2 := var1*3",  "Spectator 2", "units", 'F' );
-
-   // Read training and test data
-   // (it is also possible to use ASCII format as input -> see TMVA Users Guide)
-   //TString fname = "./tmva_class_example.root";
+  // --- 1-dimensional likelihood ("naive Bayes estimator")
    
-   //if (gSystem->AccessPathName( fname ))  // file does not exist in local directory
-   //   gSystem->Exec("wget http://root.cern.ch/files/tmva_class_example.root");
-   
-   
-   TFile *inputS = TFile::Open("/data/wangj/TutorialsSamples/Dmesonana_hiforest_official_PbPbD0tokaonpion_Pt0153050_tkpt1p0eta1p1_2760GeV_0613_genmatched_Candbase.root");
-   TFile *inputB = TFile::Open("/data/wangj/TutorialsSamples/Dmesonana_Rereco_MBtrig_d0pt0_y1p2_tk1p0_eta1p1_d2p0_alpha0p2_tight_0710_6lumi_Candbase.root");
+  Use["Likelihood"]      = (int)(MVAtype == "Likelihood"); 
+  Use["LikelihoodD"]     = (int)(MVAtype == "LikelihoodD");// the "D" extension indicates decorrelated input variables (see option strings)
+  Use["LikelihoodPCA"]   = (int)(MVAtype == "LikelihoodPCA");// the "PCA" extension indicates PCA-transformed input variables (see option strings)
+  Use["LikelihoodKDE"]   = (int)(MVAtype == "LikelihoodKDE");
+  Use["LikelihoodMIX"]   = (int)(MVAtype == "LikelihoodMIX");
 
-   std::cout << "--- TMVAClassification       : Using input file: " << inputS->GetName() << " & "<< inputB->GetName() <<std::endl;
+  // --- Mutidimensional likelihood and Nearest-Neighbour methods
+  Use["PDERS"]           = (int)(MVAtype == "PDERS");
+  Use["PDERSD"]          = (int)(MVAtype == "PDERSD");
+  Use["PDERSPCA"]        = (int)(MVAtype == "PDERSPCA");
+  Use["PDEFoam"]         = (int)(MVAtype == "PDEFoam");
+  Use["PDEFoamBoost"]    = (int)(MVAtype == "PDEFoamBoost"); // uses generalised MVA method boosting
+  Use["KNN"]             = (int)(MVAtype == "KNN"); // k-nearest neighbour method
+  
+  // --- Linear Discriminant Analysis
+  Use["LD"]              = (int)(MVAtype == "LD"); // Linear Discriminant identical to Fisher
+  Use["Fisher"]          = (int)(MVAtype == "Fisher");
+  Use["FisherG"]         = (int)(MVAtype == "FisherG");
+  Use["BoostedFisher"]   = (int)(MVAtype == "BoostedFisher"); // uses generalised MVA method boosting
+  Use["HMatrix"]         = (int)(MVAtype == "HMatrix");
+
+  // --- Function Discriminant analysis
+  Use["FDA_GA"]          = (int)(MVAtype == "FDA_GA") ; // minimisation of user-defined function using Genetics Algorithm
+  Use["FDA_SA"]          = (int)(MVAtype == "FDA_SA");
+  Use["FDA_MC"]          = (int)(MVAtype == "FDA_MC");
+  Use["FDA_MT"]          = (int)(MVAtype == "FDA_MT");
+  Use["FDA_GAMT"]        = (int)(MVAtype == "FDA_GAMT");
+  Use["FDA_MCMT"]        = (int)(MVAtype == "FDA_MCMT");
    
-   // --- Register the training and test trees
+  // --- Neural Networks (all are feed-forward Multilayer Perceptrons)
+  Use["MLP"]             = (int)(MVAtype == "MLP"); // Recommended ANN
+  Use["MLPBFGS"]         = (int)(MVAtype == "MLPBFGS"); // Recommended ANN with     optional training method
+  Use["MLPBNN"]          = (int)(MVAtype == "MLPBNN"); // Recommended ANN with B    FGS training method and bayesian regulator
+  Use["CFMlpANN"]        = (int)(MVAtype == "CFMlpANN"); // Depreciated ANN from     ALEPH
+  Use["TMlpANN"]         = (int)(MVAtype == "TMlpANN"); // ROOT's own ANN
 
-   TTree *signal     = (TTree*)inputS->Get("ntDzero");
-   TTree *background = (TTree*)inputB->Get("ntDzero"); 
+  // --- Support Vector Machine
+  Use["SVM"]             = (int)(MVAtype == "SVM");
 
-   //global event weights per tree (see below for setting event-wise weights)
-   Double_t signalWeight     = 1.0;
-   Double_t backgroundWeight = 1.0;
+  // neural network
+  Use["DNN"]             = (int)(MVAtype == "DNN");     // Deep Neural Network
+
+  // --- Boosted Decision Trees
+  Use["BDT"]             = (int)(MVAtype == "BDT");  // uses Adaptive Boost
+  Use["BDTG"]            = (int)(MVAtype == "BDTG"); // uses Gradient Boost
+  Use["BDTB"]            = (int)(MVAtype == "BDTB"); // uses Bagging
+  Use["BDTD"]            = (int)(MVAtype == "BDTD"); // decorrelation + Adaptive     Boost
+  Use["BDTF"]            = (int)(MVAtype == "BDTF"); // allow usage of fisher di    scriminant for node splitting
+
+  // --- Friedman's RuleFit method, ie, an optimised series of cuts ("rules")
+  Use["RuleFit"]         = (int)(MVAtype == "RuleFit");
+  // ---------------------------------------------------------------
+
+
+  std::cout << std::endl;
+  std::cout << "==> Start TMVAClassification" << std::endl;
+
+  // Select methods (don't look at this code - not of interest)
+  if(myMethodList!= "") {
+    for(std::map<std::string,int>::iterator it = Use.begin(); 
+        it != Use.end(); it++) it->second = 0;
+    std::vector<TString> mlist =
+      TMVA::gTools().SplitString( myMethodList, ',' );
+    for(UInt_t i=0; i<mlist.size(); i++) {
+      std::string regMethod(mlist[i]);
+      if (Use.find(regMethod)==Use.end()) {
+        std::cout << "Method \"" << regMethod << "\" not known in TMVA under this name. Choose among the following:" << std::endl;
+        for(std::map<std::string,int>::iterator it = Use.begin(); it != Use.end(); it++) std::cout << it->first << " ";
+        std::cout << std::endl;
+        return;
+      }
+      Use[regMethod] = 1;
+    }
+  }
+
+  // --------------------------------------------------------------------------------------------------
+
+  // --- Here the preparation phase begins
+
+  // Create a ROOT output file where TMVA will store ntuples, histograms, etc.
+  //TString outfileName("TMVA.root");
    
-   // You can add an arbitrary number of signal or background trees
-   factory->AddSignalTree    ( signal,     signalWeight     );
-   factory->AddBackgroundTree( background, backgroundWeight );
+  TString outfileName(Form("ROOT/TMVA_%s_%s_%.0f_%.0f.root",MVAtype.Data(),colsyst.Data(),ptmin,ptmax));
+  TFile* outputFile = TFile::Open(outfileName,"RECREATE");
+
+  // Create the factory object. Later you can choose the methods
+  // whose performance you'd like to investigate. The factory is 
+  // the only TMVA object you have to interact with
+  //
+  // The first argument is the base of the name of all the
+  // weightfiles in the directory weight/
+  //
+  // The second argument is the output file for the training results
+  // All TMVA output can be suppressed by removing the "!" (not) in
+  // front of the "Silent" argument in the option string
+  TMVA::Factory *factory = new TMVA::Factory( "TMVAClassification", outputFile,
+                                              "!V:!Silent:Color:DrawProgressBar:Transformations=I;D;P;G,D:AnalysisType=Classification" );
+
+  // If you wish to modify default settings
+  // (please check "src/Config.h" to see all available global options)
+  //    (TMVA::gConfig().GetVariablePlotting()).fTimesRMS = 8.0;
+  //    (TMVA::gConfig().GetIONames()).fWeightFileDir = "myWeightDirectory";
+
+  // Define the input variables that shall be used for the MVA training
+  // note that you may also use variable expressions, such as: "3*var1/var2*abs(var3)"
+  // [all types of expressions that can also be parsed by TTree::Draw( "expression" )]
+
+  factory->AddVariable("Btrk1Pt");//>
+  factory->AddVariable("Btrk2Pt");//>
+  factory->AddVariable("Bchi2cl");//>
+  factory->AddVariable("BsvpvDistance/BsvpvDisErr");//>
+  factory->AddVariable("Bd0/Bd0Err");//>
+  factory->AddVariable("cos(Bdtheta)");//>
+  factory->AddVariable("Bmu1pt");//>
+  factory->AddVariable("Bmu2pt");//>
+  factory->AddVariable("Bpt");//>
+  factory->AddVariable("abs(Btktkmass-1.019455)");//>
+  factory->AddVariable("Blxy");//>
+
+  // You can add so-called "Spectator variables", which are not used in the MVA training,
+  // but will appear in the final "TestTree" produced by TMVA. This TestTree will contain the
+  // input variables, the response values of all trained MVAs, and the spectator variables
+  //factory->AddSpectator( "spec1 := var1*2",  "Spectator 1", "units", 'F' );
+  //factory->AddSpectator( "spec2 := var1*3",  "Spectator 2", "units", 'F' );
+
+  // Read training and test data
+  // (it is also possible to use ASCII format as input -> see TMVA Users Guide)
+  //TString fname = "./tmva_class_example.root";
    
-   // To give different trees for training and testing, do as follows:
-   //    factory->AddSignalTree( signalTrainingTree, signalTrainWeight, "Training" );
-   //    factory->AddSignalTree( signalTestTree,     signalTestWeight,  "Test" );
+  //if (gSystem->AccessPathName( fname ))  // file does not exist in local directory
+  //   gSystem->Exec("wget http://root.cern.ch/files/tmva_class_example.root");
    
-   // Use the following code instead of the above two or four lines to add signal and background
-   // training and test events "by hand"
-   // NOTE that in this case one should not give expressions (such as "var1+var2") in the input
-   //      variable definition, but simply compute the expression before adding the event
-   //
-   //     // --- begin ----------------------------------------------------------
-   //     std::vector<Double_t> vars( 4 ); // vector has size of number of input variables
-   //     Float_t  treevars[4], weight;
-   //     
-   //     // Signal
-   //     for (UInt_t ivar=0; ivar<4; ivar++) signal->SetBranchAddress( Form( "var%i", ivar+1 ), &(treevars[ivar]) );
-   //     for (UInt_t i=0; i<signal->GetEntries(); i++) {
-   //        signal->GetEntry(i);
-   //        for (UInt_t ivar=0; ivar<4; ivar++) vars[ivar] = treevars[ivar];
-   //        // add training and test events; here: first half is training, second is testing
-   //        // note that the weight can also be event-wise
-   //        if (i < signal->GetEntries()/2.0) factory->AddSignalTrainingEvent( vars, signalWeight );
-   //        else                              factory->AddSignalTestEvent    ( vars, signalWeight );
-   //     }
-   //   
-   //     // Background (has event weights)
-   //     background->SetBranchAddress( "weight", &weight );
-   //     for (UInt_t ivar=0; ivar<4; ivar++) background->SetBranchAddress( Form( "var%i", ivar+1 ), &(treevars[ivar]) );
-   //     for (UInt_t i=0; i<background->GetEntries(); i++) {
-   //        background->GetEntry(i);
-   //        for (UInt_t ivar=0; ivar<4; ivar++) vars[ivar] = treevars[ivar];
-   //        // add training and test events; here: first half is training, second is testing
-   //        // note that the weight can also be event-wise
-   //        if (i < background->GetEntries()/2) factory->AddBackgroundTrainingEvent( vars, backgroundWeight*weight );
-   //        else                                factory->AddBackgroundTestEvent    ( vars, backgroundWeight*weight );
-   //     }
-         // --- end ------------------------------------------------------------
-   //
-   // --- end of tree registration 
+  TFile *inputS = new TFile(inputSname.Data());
+  TFile *inputB = new TFile(inputBname.Data());
 
-   // Set individual event weights (the variables must exist in the original TTree)
-   //    for signal    : factory->SetSignalWeightExpression    ("weight1*weight2");
-   //    for background: factory->SetBackgroundWeightExpression("weight1*weight2");
-   //factory->SetBackgroundWeightExpression( "weight" );
+  std::cout << "--- TMVAClassification       : Using input file: " 
+    << inputS->GetName() << " & "<< inputB->GetName() <<std::endl;
+   
+  // --- Register the training and test trees
+  TTree *background = (TTree*)inputB->Get("ntphi"); 
+  background->AddFriend("ntHlt");
+  background->AddFriend("ntHi");
+  background->AddFriend("ntSkim");
+ 
+  TTree* generated = (TTree*)inputS->Get("ntGen");
+  generated->AddFriend("ntHlt");
+  generated->AddFriend("ntHi");
+   
+  TTree *signal = (TTree*)inputS->Get("ntphi");
+  signal->AddFriend("ntHlt");
+  signal->AddFriend("ntHi");
+  signal->AddFriend("ntSkim");
+  signal->AddFriend(generated);
+   
+  //global event weights per tree (see below for setting event-wise weights)
+  Double_t signalWeight     = 1.0;
+  Double_t backgroundWeight = 1.0;
+   
+  // You can add an arbitrary number of signal or background trees
+  factory->AddSignalTree    ( signal,     signalWeight     );
+  factory->AddBackgroundTree( background, backgroundWeight );
+   
+  // To give different trees for training and testing, do as follows:
+  //    factory->AddSignalTree( signalTrainingTree, signalTrainWeight, "Training" );
+  //    factory->AddSignalTree( signalTestTree,     signalTestWeight,  "Test" );
+   
+  // Use the following code instead of the above two or four lines to add signal and background
+  // training and test events "by hand"
+  // NOTE that in this case one should not give expressions (such as "var1+var2") in the input
+  //      variable definition, but simply compute the expression before adding the event
+  //
+  //     // --- begin ----------------------------------------------------------
+  //     std::vector<Double_t> vars( 4 ); // vector has size of number of input variables
+  //     Float_t  treevars[4], weight;
+  //     
+  //     // Signal
+  //     for (UInt_t ivar=0; ivar<4; ivar++) signal->SetBranchAddress( Form( "var%i", ivar+1 ), &(treevars[ivar]) );
+  //     for (UInt_t i=0; i<signal->GetEntries(); i++) {
+  //        signal->GetEntry(i);
+  //        for (UInt_t ivar=0; ivar<4; ivar++) vars[ivar] = treevars[ivar];
+  //        // add training and test events; here: first half is training, second is testing
+  //        // note that the weight can also be event-wise
+  //        if (i < signal->GetEntries()/2.0) factory->AddSignalTrainingEvent( vars, signalWeight );
+  //        else                              factory->AddSignalTestEvent    ( vars, signalWeight );
+  //     }
+  //   
+  //     // Background (has event weights)
+  //     background->SetBranchAddress( "weight", &weight );
+  //     for (UInt_t ivar=0; ivar<4; ivar++) background->SetBranchAddress( Form( "var%i", ivar+1 ), &(treevars[ivar]) );
+  //     for (UInt_t i=0; i<background->GetEntries(); i++) {
+  //        background->GetEntry(i);
+  //        for (UInt_t ivar=0; ivar<4; ivar++) vars[ivar] = treevars[ivar];
+  //        // add training and test events; here: first half is training, second is testing
+  //        // note that the weight can also be event-wise
+  //        if (i < background->GetEntries()/2) factory->AddBackgroundTrainingEvent( vars, backgroundWeight*weight );
+  //        else                                factory->AddBackgroundTestEvent    ( vars, backgroundWeight*weight );
+  //     }
+  // --- end ------------------------------------------------------------
+  //
+  // --- end of tree registration 
 
-   // Apply additional cuts on the signal and background samples (can be different)
+  // Set individual event weights (the variables must exist in the original TTree)
+  //    for signal    : factory->SetSignalWeightExpression    ("weight1*weight2");
+  //    for background: factory->SetBackgroundWeightExpression("weight1*weight2");
+  //factory->SetBackgroundWeightExpression( "weight" );
 
-   //pp
-   TCut mycuts = "dcandy>-1.&&dcandy<1.&&dcanddau1pt>1.0&&dcanddau2pt>1.0&&(matchedtogen&&nongendoublecounted)&&dcandffls3d>2.0&&TMath::ACos(dcandcosalpha)<0.12&&dcandfprob>0.05&&dcandpt>5.5&&dcandpt<7.0";
-   TCut mycutb = "MinBias&&dcandy>-1.&&dcandy<1.&&dcanddau1pt>1.0&&dcanddau2pt>1.0&&(TMath::Abs(dcandmass-1.865)>0.10&&TMath::Abs(dcandmass-1.865)<0.15)&&dcandffls3d>2.0&&TMath::ACos(dcandcosalpha)<0.12&&dcandfprob>0.05&&dcandpt>5.5&&dcandpt<7.0";
+  // Apply additional cuts on the signal and background samples (can be different)
+
+  //pp
+  // TCut mycuts = "Bgen==23333&&abs(PVz)<15&&TMath::Abs(By)<2.4&&TMath::Abs(Bmumumass-3.096916)<0.15&&Bmass>5&&Bmass<6&& ((abs(Bmu1eta)<1.2 && Bmu1pt>3.5) || (abs(Bmu1eta)>1.2 && abs(Bmu1eta)<2.1 && Bmu1pt>(5.77-1.8*abs(Bmu1eta))) || (abs(Bmu1eta)>2.1 && abs(Bmu1eta)<2.4 && Bmu1pt>1.8)) && ((abs(Bmu2eta)<1.2 && Bmu2pt>3.5) || (abs(Bmu2eta)>1.2 && abs(Bmu2eta)<2.1 && Bmu2pt>(5.77-1.8*abs(Bmu2eta))) || (abs(Bmu2eta)>2.1 && abs(Bmu2eta)<2.4 && Bmu2pt>1.8)) && Bmu1TMOneStationTight && Bmu2TMOneStationTight && Bmu1InPixelLayer>0 && (Bmu1InPixelLayer+Bmu1InStripLayer) > 5 && Bmu2InPixelLayer>0 && (Bmu2InPixelLayer+Bmu2InStripLayer) > 5 && Bmu1dxyPV< 0.3 && Bmu2dxyPV< 0.3 && Bmu1dzPV<20 && Bmu2dzPV<20 && Bmu1isGlobalMuon && Bmu2isGlobalMuon && Btrk1highPurity && abs(Btrk1Eta)<2.4 && Btrk1Pt>0.5 && Bchi2cl>0.005 && ((Bpt>5 && Bpt<10 && Btrk1Pt>0.75 && Bchi2cl>0.032 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.99 && abs(Btrk1Eta)<2.4)|| (Bpt>10 && Bpt<20 && Btrk1Pt>0.88 && Bchi2cl>0.005 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.97 && abs(Btrk1Eta)<2.39) || (Bpt>20 && Bpt<30 && Btrk1Pt>0.84 && Bchi2cl>0.014 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.60 && abs(Btrk1Eta)<2.38) || (Bpt>30 && Bpt<80 && Btrk1Pt>1.06 && Bchi2cl>0.015 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.99 && abs(Btrk1Eta)<2.37))";
+   //TCut mycutb = "abs(PVz)<15&&TMath::Abs(By)<2.4&&TMath::Abs(Bmumumass-3.096916)<0.15&&Bmass>5&&Bmass<6&& ((abs(Bmu1eta)<1.2 && Bmu1pt>3.5) || (abs(Bmu1eta)>1.2 && abs(Bmu1eta)<2.1 && Bmu1pt>(5.77-1.8*abs(Bmu1eta))) || (abs(Bmu1eta)>2.1 && abs(Bmu1eta)<2.4 && Bmu1pt>1.8)) && ((abs(Bmu2eta)<1.2 && Bmu2pt>3.5) || (abs(Bmu2eta)>1.2 && abs(Bmu2eta)<2.1 && Bmu2pt>(5.77-1.8*abs(Bmu2eta))) || (abs(Bmu2eta)>2.1 && abs(Bmu2eta)<2.4 && Bmu2pt>1.8)) && Bmu1TMOneStationTight && Bmu2TMOneStationTight && Bmu1InPixelLayer>0 && (Bmu1InPixelLayer+Bmu1InStripLayer) > 5 && Bmu2InPixelLayer>0 && (Bmu2InPixelLayer+Bmu2InStripLayer) > 5 && Bmu1dxyPV< 0.3 && Bmu2dxyPV< 0.3 && Bmu1dzPV<20 && Bmu2dzPV<20 && Bmu1isGlobalMuon && Bmu2isGlobalMuon && Btrk1highPurity && abs(Btrk1Eta)<2.4 && Btrk1Pt>0.5 && Bchi2cl>0.005 && ((Bpt>5 && Bpt<10 && Btrk1Pt>0.75 && Bchi2cl>0.032 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.99 && abs(Btrk1Eta)<2.4)|| (Bpt>10 && Bpt<20 && Btrk1Pt>0.88 && Bchi2cl>0.005 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.97 && abs(Btrk1Eta)<2.39) || (Bpt>20 && Bpt<30 && Btrk1Pt>0.84 && Bchi2cl>0.014 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.60 && abs(Btrk1Eta)<2.38) || (Bpt>30 && Bpt<80 && Btrk1Pt>1.06 && Bchi2cl>0.015 && (BsvpvDistance/BsvpvDisErr)>0 && cos(Bdtheta)>0.99 && abs(Btrk1Eta)<2.37))";
+
+    TString cuts;
+    if(!isPbPb) cuts = Form("(%s)&&Bpt>%0.f&&Bpt<%0.f",mycuts.Data(),ptmin,ptmax);
+    else cuts = Form("(%s)&&Bpt>%0.f&&Bpt<%0.f&&hiBin>=0&&hiBin<=200",mycuts.Data(),ptmin,ptmax);
+    TString cutb;
+   if(!isPbPb) cutb = Form("(%s)&&Bpt>%0.f&&Bpt<%0.f",mycutb.Data(),ptmin,ptmax);
+   else cutb = Form("(%s)&&Bpt>%0.f&&Bpt<%0.f&&hiBin>=0&&hiBin<=200",mycutb.Data(),ptmin,ptmax);
+
+   TCut mycutS = (TCut)mycuts;
+   TCut mycutB = (TCut)mycutb;
+
 
    // Tell the factory how to use the training and testing events
    //
@@ -282,7 +345,7 @@ void TMVAClassification( TString myMethodList = "" )
    // To also specify the number of testing events, use:
    //    factory->PrepareTrainingAndTestTree( mycut,
    //                                         "NSigTrain=3000:NBkgTrain=3000:NSigTest=3000:NBkgTest=3000:SplitMode=Random:!V" );
-   factory->PrepareTrainingAndTestTree( mycuts, mycutb,
+   factory->PrepareTrainingAndTestTree( mycutS, mycutB,
                                         "nTrain_Signal=0:nTrain_Background=0:SplitMode=Random:NormMode=NumEvents:!V" );
 
    // ---- Book MVA methods
@@ -295,7 +358,7 @@ void TMVAClassification( TString myMethodList = "" )
    // Cut optimisation
    if (Use["Cuts"])
       factory->BookMethod( TMVA::Types::kCuts, "Cuts",
-                           "!H:!V:FitMethod=MC:EffSel:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax" );
+                           "!H:!V:FitMethod=MC:EffSel:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax:VarProp[3]=FMax" );
    //                           "!H:!V:FitMethod=MC:EffSel:SampleSize=200000:VarProp=FSmart" );
 
    if (Use["CutsD"])
@@ -304,16 +367,16 @@ void TMVAClassification( TString myMethodList = "" )
 
    if (Use["CutsPCA"])
       factory->BookMethod( TMVA::Types::kCuts, "CutsPCA",
-                           "!H:!V:FitMethod=MC:EffSel:SampleSize=200000:VarProp=FSmart:VarTransform=PCA:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax" );
+                           "!H:!V:FitMethod=MC:EffSel:SampleSize=200000:VarProp=FSmart:VarTransform=PCA:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax:VarProp[3]=FMax" );
 
    if (Use["CutsGA"])
      factory->BookMethod( TMVA::Types::kCuts, "CutsGA",
-			  "H:!V:FitMethod=GA:EffSel:Steps=5:Cycles=3:PopSize=400:SC_steps=10:SC_rate=5:SC_factor=0.95:VarProp[0]=FMax:VarProp[1]=FMin:VarProp[2]=FMax");
+			  "H:!V:FitMethod=GA:EffSel:Steps=5:Cycles=3:PopSize=400:SC_steps=10:SC_rate=5:SC_factor=0.95:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax:VarProp[3]=FMax:VarProp[4]=FMax:VarProp[5]=FMax:VarProp[6]=FMax:VarProp[7]=FMax:VarProp[8]=FMax:VarProp[9]=FMin:VarProp[10]=FMax");
    //"H:!V:FitMethod=GA:EffSel:Steps=30:Cycles=3:PopSize=400:SC_steps=10:SC_rate=5:SC_factor=0.95:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax");
 
    if (Use["CutsSA"])
       factory->BookMethod( TMVA::Types::kCuts, "CutsSA",
-                           "!H:!V:FitMethod=SA:EffSel:MaxCalls=150000:KernelTemp=IncAdaptive:InitialTemp=1e+6:MinTemp=1e-6:Eps=1e-10:UseDefaultScale:VarProp[0]=FMax:VarProp[1]=FMax" );
+                           "!H:!V:FitMethod=SA:EffSel:MaxCalls=150000:KernelTemp=IncAdaptive:InitialTemp=1e+6:MinTemp=1e-6:Eps=1e-10:UseDefaultScale:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax:VarProp[3]=FMax" );
    //                           "!H:!V:FitMethod=SA:EffSel:MaxCalls=150000:KernelTemp=IncAdaptive:InitialTemp=1e+6:MinTemp=1e-6:Eps=1e-10:UseDefaultScale:VarProp[0]=FMax:VarProp[1]=FMax:VarProp[2]=FMax" );
 
    // Likelihood ("naive Bayes estimator")
@@ -465,6 +528,66 @@ void TMVAClassification( TString myMethodList = "" )
       factory->BookMethod( TMVA::Types::kRuleFit, "RuleFit",
                            "H:!V:RuleFitModule=RFTMVA:Model=ModRuleLinear:MinImp=0.001:RuleMinDist=0.001:NTrees=20:fEventsMin=0.01:fEventsMax=0.5:GDTau=-1.0:GDTauPrec=0.01:GDStep=0.01:GDNSteps=10000:GDErrScale=1.02" );
 
+   if (Use["DNN"] || Use["DNN2"] || Use["DNN_GPU"] || Use["DNN_CPU"])
+   {
+      // General layout.
+      // FIXME RELU instead of TANH
+      TString layoutString ("Layout=RELU|128,RELU|128,RELU|128,LINEAR");
+      TString layoutString2 ("Layout=TANH|256,TANH|256,TANH|128,TANH|128,LINEAR");
+
+      // Training strategies.
+      // FIXME switched LearningRate=1e-1 to 1e-2 for training0
+      TString training0("LearningRate=1e-2,Momentum=0.9,Repetitions=1,"
+                        "ConvergenceSteps=20,BatchSize=256,TestRepetitions=10,"
+                        "WeightDecay=1e-4,Regularization=L2,"
+                        "DropConfig=0.0+0.5+0.5+0.5, Multithreading=True");
+      TString training1("LearningRate=1e-2,Momentum=0.9,Repetitions=1,"
+                        "ConvergenceSteps=20,BatchSize=256,TestRepetitions=10,"
+                        "WeightDecay=1e-4,Regularization=L2,"
+                        "DropConfig=0.0+0.0+0.0+0.0, Multithreading=True");
+      TString training2("LearningRate=1e-3,Momentum=0.0,Repetitions=1,"
+                        "ConvergenceSteps=20,BatchSize=256,TestRepetitions=10,"
+                        "WeightDecay=1e-4,Regularization=L2,"
+                        "DropConfig=0.0+0.0+0.0+0.0, Multithreading=True");
+      TString trainingStrategyString ("TrainingStrategy=");
+      trainingStrategyString += training0 + "|" + training1 + "|" + training2;
+
+      // General Options.
+      TString dnnOptions ("!H:V:ErrorStrategy=CROSSENTROPY:VarTransform=N:"
+                          "WeightInitialization=XAVIERUNIFORM");
+      dnnOptions.Append (":"); dnnOptions.Append (layoutString);
+      dnnOptions.Append (":"); dnnOptions.Append (trainingStrategyString);
+
+      TString dnnOptions2 ("!H:V:ErrorStrategy=CROSSENTROPY:VarTransform=N:"
+                          "WeightInitialization=XAVIERUNIFORM");
+      dnnOptions2.Append (":"); dnnOptions2.Append (layoutString2);
+      dnnOptions2.Append (":"); dnnOptions2.Append (trainingStrategyString);
+
+      // Standard implementation, no dependencies.
+      //// TString stdOptions = dnnOptions + ":Architecture=STANDARD";
+      //// factory->BookMethod(dataloader, TMVA::Types::kDNN, "DNN", stdOptions);
+
+      if (Use["DNN"]) {
+         TString stdOptions = dnnOptions + ":Architecture=STANDARD";
+         factory->BookMethod(TMVA::Types::kDNN, "DNN", stdOptions);
+      }
+
+      if (Use["DNN2"]) {
+         TString stdOptions2 = dnnOptions2 + ":Architecture=STANDARD";
+         factory->BookMethod( TMVA::Types::kDNN, "DNN2", stdOptions2);
+      }
+
+      // Cuda implementation.
+      if (Use["DNN_GPU"]) {
+         TString gpuOptions = dnnOptions + ":Architecture=GPU";
+         factory->BookMethod( TMVA::Types::kDNN, "DNN GPU", gpuOptions);
+      }
+      // Multi-core CPU implementation.
+      if (Use["DNN_CPU"]) {
+         TString cpuOptions = dnnOptions + ":Architecture=CPU";
+         factory->BookMethod( TMVA::Types::kDNN, "DNN CPU", cpuOptions);
+      }
+   }
    // For an example of the category classifier usage, see: TMVAClassificationCategory
 
    // --------------------------------------------------------------------------------------------------
